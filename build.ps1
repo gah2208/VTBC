@@ -36,7 +36,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 6. Build exe
-pyinstaller dev\main.py --onefile --clean --noconfirm
+python -m PyInstaller dev\main.py --onefile --clean --noconfirm
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Build failed." -ForegroundColor Red
     exit 1
