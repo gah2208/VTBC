@@ -1,4 +1,3 @@
-
 # ✅ __version__ = "1.0.0"
 # ✅ Copyright 2026 Gregory Howard. All rights reserved.
 
