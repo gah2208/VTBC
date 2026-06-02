@@ -1,7 +1,0 @@
-__pycache__/
-*.pyc
-dist/
-*.exe
-release/app/
-release/archives/
-release/logs/
