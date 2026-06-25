@@ -22,6 +22,10 @@ from config import (
 # ============================================================
 DEBUG_LOG = True   # Set to False to disable logging
 
+# New: default request timeout (seconds)
+REQUEST_TIMEOUT = 10
+
+
 def _log(msg):
     if DEBUG_LOG:
         print(f"[TSClient] {msg}")
@@ -53,6 +57,9 @@ class TSClient:
         self.token_expiry = 0
         self.fail_count = 0
 
+        # NEW: persistent HTTP session for connection reuse
+        self.session = requests.Session()
+
         _log(f"Initialized TSClient (live={live})")
         self._refresh_access_token()
 
@@ -67,11 +74,19 @@ class TSClient:
         for attempt in range(ORDER_RETRY_ATTEMPTS):
 
             try:
-                r = requests.post(self.AUTH_URL, data={
+                # OLD: direct requests.post
+                # r = requests.post(self.AUTH_URL, data={
+                #     "grant_type": "refresh_token",
+                #     "refresh_token": self.refresh_token,
+                #     "client_id": self.api_key
+                # })
+
+                # NEW: use session.post with timeout
+                r = self.session.post(self.AUTH_URL, data={
                     "grant_type": "refresh_token",
                     "refresh_token": self.refresh_token,
                     "client_id": self.api_key
-                })
+                }, timeout=REQUEST_TIMEOUT)
 
                 # OLD (commented out)
                 # data = r.json()
@@ -115,7 +130,11 @@ class TSClient:
     def _safe_json(self, r):
         try:
             return r.json()
-        except:
+        except Exception:
+            try:
+                _log(f"Failed to parse JSON. Response text: {r.text}")
+            except Exception:
+                pass
             return {}
 
 
@@ -124,6 +143,9 @@ class TSClient:
     # ========================================================
     def _req(self, method, url, **kwargs):
 
+        # Allow callers to override per-call timeout (business-level)
+        timeout = kwargs.pop("timeout", REQUEST_TIMEOUT)
+
         for attempt in range(DATA_RETRY_ATTEMPTS):
 
             try:
@@ -131,10 +153,32 @@ class TSClient:
                 if "json" in kwargs:
                     _log(f"PAYLOAD → {json.dumps(kwargs['json'], indent=2)}")
 
-                r = method(url, headers=self._headers(), **kwargs)
+                # OLD: direct call via method
+                # r = method(url, headers=self._headers(), **kwargs)
 
-                if r.status_code == 200:
+                # NEW: route common requests.* methods through the session to
+                # apply consistent timeout and connection reuse. If `method` is
+                # not a requests function, call it directly.
+                func = method
+                try:
+                    # map requests.get/post/delete/put to session counterparts
+                    if method in (requests.get, requests.post, requests.delete, requests.put, requests.patch):
+                        func = getattr(self.session, method.__name__)
+                except Exception:
+                    func = method
+
+                r = func(url, headers=self._headers(), timeout=timeout, **kwargs)
+
+                # OLD: only treat 200 as success
+                # if r.status_code == 200:
+
+                # NEW: accept any 2xx as success
+                if 200 <= r.status_code < 300:
                     self.fail_count = 0
+
+                    # handle empty 204 responses
+                    if r.status_code == 204:
+                        return {}
 
                     # OLD (commented out)
                     # return r.json()
@@ -210,3 +254,24 @@ class TSClient:
             requests.delete,
             f"{self.base_url}/orderexecution/orders/{oid}"
         )
+
+    # ========================================================
+    # NEW: Lookup order(s) by client reference (clientOrderId)
+    # ========================================================
+    def get_order_by_client_ref(self, client_ref, timeout=None):
+        """
+        Query the orders endpoint for orders that match the provided
+        clientOrderId (client_ref). Returns the API response (dict) or {}
+        if none found or on error.
+        """
+        if timeout is None:
+            return self._req(
+                requests.get,
+                f"{self.base_url}/orderexecution/orders?clientOrderId={client_ref}"
+            )
+        else:
+            return self._req(
+                requests.get,
+                f"{self.base_url}/orderexecution/orders?clientOrderId={client_ref}",
+                timeout=timeout
+            )
