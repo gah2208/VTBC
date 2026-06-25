@@ -35,6 +35,9 @@ def initialize_ema_engine(client, expiry):
     config = load_merged_config()
     loop = config["LOOP"]
 
+    # Instantiate EMAEngine before using it
+    ema_engine = EMAEngine([EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS], loop)
+
 
     # ------------------------------------------------------------
     # 1) Try persistence first
