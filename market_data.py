@@ -40,3 +40,35 @@ def get_historical_minute_bars(client, minutes_needed):
         time.sleep(60)
 
     return prices[-minutes_needed:]
+
+
+# ============================================================
+# SURGICAL ADDITIONS: compatibility wrappers expected by main.py
+# ============================================================
+
+# Note: main.py imports get_minute_prices_for_rebuild and get_atm_surface
+# from this module. Provide thin wrappers here that adapt to the existing
+# get_historical_minute_bars implementation so main.py can import
+# successfully without changing its code.
+
+
+def get_minute_prices_for_rebuild(client, expiry):
+    """
+    Compatibility wrapper that returns the last 60 1-minute SPX prices.
+    """
+    # expiry is currently unused in this wrapper but kept for API compatibility
+    return get_historical_minute_bars(client, 60)
+
+
+
+def get_atm_surface(client, expiry, spx_price):
+    """
+    Minimal ATM surface provider used by main.py. Returns a dictionary with
+    an "atm" key representing the at-the-money strike as an integer.
+
+    This is intentionally minimal and surgical: it allows main.py to run
+    and perform downstream checks. A more feature-complete implementation
+    can replace this later.
+    """
+    atm = int(round(spx_price))
+    return {"atm": atm}
