@@ -1,21 +1,35 @@
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 # Copyright 2026 Gregory Howard
 
 import requests
 import time
 import json
 import os
+import uuid
 
 # ============================================================
 # CONFIG IMPORT
 # ============================================================
-from config import (
-    ORDER_RETRY_ATTEMPTS,
-    TOKEN_REFRESH_DELAY,
-    DATA_RETRY_ATTEMPTS,
-    DATA_RETRY_DELAY,
-    MAX_API_FAILURES
-)
+# CHANGE: Use config_loader to get merged config instead of importing from config
+from config_loader import load_merged_config
+
+# Load merged config and extract constants at module startup
+_cfg = load_merged_config()
+ORDER_RETRY_ATTEMPTS = _cfg.get("ORDER_RETRY_ATTEMPTS", 3)
+TOKEN_REFRESH_DELAY = _cfg.get("TOKEN_REFRESH_DELAY", 1)
+DATA_RETRY_ATTEMPTS = _cfg.get("DATA_RETRY_ATTEMPTS", 3)
+DATA_RETRY_DELAY = _cfg.get("DATA_RETRY_DELAY", 0.5)
+MAX_API_FAILURES = _cfg.get("MAX_API_FAILURES", 5)
+ORDER_TIMEOUT = _cfg.get("ORDER_TIMEOUT", 180)
+
+# OLD CONFIG IMPORT (commented out - using config_loader instead)
+# from config import (
+#     ORDER_RETRY_ATTEMPTS,
+#     TOKEN_REFRESH_DELAY,
+#     DATA_RETRY_ATTEMPTS,
+#     DATA_RETRY_DELAY,
+#     MAX_API_FAILURES
+# )
 
 # ============================================================
 # OPTIONAL DEBUG LOGGING
@@ -151,7 +165,10 @@ class TSClient:
             try:
                 _log(f"REQUEST → {url}")
                 if "json" in kwargs:
-                    _log(f"PAYLOAD → {json.dumps(kwargs['json'], indent=2)}")
+                    try:
+                        _log(f"PAYLOAD → {json.dumps(kwargs['json'], indent=2)}")
+                    except Exception:
+                        _log("PAYLOAD → <unserializable>")
 
                 # OLD: direct call via method
                 # r = method(url, headers=self._headers(), **kwargs)
@@ -219,26 +236,95 @@ class TSClient:
         )
 
 
-    def place_order(self, payload):
+    def place_order(self, payload, client_ref=None, timeout=None):
         """
         payload MUST contain:
             - OrderType
-            - LimitPrice
+            - LimitPrice (if OrderType is Limit)
             - Legs: [ {Symbol, TradeAction, Quantity}, ... ]
+
+        NEW: Supports optional client_ref (clientOrderId) for idempotency.
+        If initial POST is ambiguous (timeout/no body), queries by client_ref
+        before re-submitting to avoid duplicate orders.
         """
 
         url = f"{self.base_url}/orderexecution/orders"
 
+        # NEW: Generate unique client reference if not provided
+        if client_ref is None:
+            client_ref = f"vtbc-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
+
+        # NEW: Attach clientOrderId to payload for idempotency tracking
+        try:
+            if "clientOrderId" not in payload and "ClientOrderId" not in payload:
+                payload["clientOrderId"] = client_ref
+        except Exception:
+            # payload might not be a dict; in that case, just continue
+            pass
+
+        # NEW: Determine call timeout (use provided or ORDER_TIMEOUT from config)
+        call_timeout = timeout if timeout is not None else ORDER_TIMEOUT
+
+        # OLD: Simple _req call without timeout parameter
+        # r = self._req(
+        #     requests.post,
+        #     url,
+        #     json=payload
+        # )
+
+        # NEW: Use business-level ORDER_TIMEOUT for order submission
         r = self._req(
             requests.post,
             url,
-            json=payload
+            json=payload,
+            timeout=call_timeout
         )
 
+        # Try to extract OrderID from immediate response
         if r:
-            _log(f"Order placed. OrderID={r.get('OrderID')}")
-            return r.get("OrderID")
+            # OLD (commented out)
+            # _log(f"Order placed. OrderID={r.get('OrderID')}")
+            # return r.get("OrderID")
 
+            # NEW: Try multiple possible ID field names
+            oid = r.get("OrderID") or r.get("orderId") or r.get("id")
+            if oid:
+                _log(f"Order placed. OrderID={oid}")
+                return oid
+
+        # NEW: Ambiguous result (timeout or no body). Avoid blind re-submit: query by client ref.
+        _log(f"Order submission ambiguous — looking up by client_ref={client_ref}")
+
+        lookup = self.get_order_by_client_ref(client_ref, timeout=call_timeout)
+
+        # NEW: Attempt to extract order id from lookup result
+        def _extract_order_id(resp):
+            if not resp:
+                return None
+            if isinstance(resp, dict):
+                for k in ("OrderID", "orderId", "id"):
+                    if k in resp and resp[k]:
+                        return resp[k]
+                # look for lists of orders in values
+                for v in resp.values():
+                    if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):
+                        for k in ("OrderID", "orderId", "id"):
+                            if k in v[0] and v[0][k]:
+                                return v[0][k]
+                return None
+            if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+                for k in ("OrderID", "orderId", "id"):
+                    if k in resp[0] and resp[0][k]:
+                        return resp[0][k]
+            return None
+
+        oid = _extract_order_id(lookup)
+        if oid:
+            _log(f"Found order by client_ref. OrderID={oid}")
+            return oid
+
+        # NEW: No order found by client_ref; do not re-submit blindly
+        _log("No order found by client_ref; submission considered failed (no duplicate submit)")
         return None
 
 
