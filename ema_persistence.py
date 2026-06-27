@@ -1,4 +1,4 @@
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 # copyright (c) Gregory Howard  2026  all rights reserved
 
@@ -39,6 +39,7 @@ __version__ = "1.0.3"
 
 import json
 import os
+import time
 from datetime import datetime
 
 # NEW CONSTANTS IMPORT
@@ -59,11 +60,13 @@ def save_ema_state(ema_engine):
     """
     Save EMA3/EMA5/EMA20 values to disk.
 
-    Timestamp is date-only because EMAs are anchored at the start of each day.
+    NEW: Timestamp is saved as Unix epoch (seconds since 1970-01-01).
+    This allows safe round-trip conversion without date string parsing issues.
     """
 
+    # NEW: Use epoch timestamp (integer) instead of date string
     data = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d"),
+        "timestamp": int(time.time()),
         "ema3": ema_engine.get(EMA3_SECONDS),
         "ema5": ema_engine.get(EMA5_SECONDS),
         "ema20": ema_engine.get(EMA20_SECONDS)
@@ -90,9 +93,25 @@ def is_stale(state):
     Determine if the saved EMA state is too old to use.
 
     EMA_MAX_STALENESS_DAYS is still config-driven.
+    
+    NEW: Expects timestamp to be Unix epoch (integer seconds).
     """
 
-    saved_date = datetime.strptime(state["timestamp"], "%Y-%m-%d").date()
-    age_days = (datetime.now().date() - saved_date).days
+    # NEW: timestamp is now epoch seconds (integer), use directly
+    saved_ts = state.get("timestamp", 0)
+    if isinstance(saved_ts, str):
+        # OLD: Handle legacy date string format
+        try:
+            saved_date = datetime.strptime(saved_ts, "%Y-%m-%d").date()
+            age_days = (datetime.now().date() - saved_date).days
+        except Exception:
+            return True  # Treat parse failure as stale
+    else:
+        # NEW: Handle epoch timestamp
+        try:
+            saved_dt = datetime.fromtimestamp(saved_ts)
+            age_days = (datetime.now() - saved_dt).days
+        except Exception:
+            return True  # Treat conversion failure as stale
 
     return age_days > EMA_MAX_STALENESS_DAYS
