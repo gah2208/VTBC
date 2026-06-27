@@ -1,4 +1,4 @@
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 # copyright (c) Gregory Howard  2026  all rights reserved
 
@@ -41,14 +41,18 @@ import json
 import os
 from datetime import datetime
 
-# OLD CONFIG IMPORT COMMENTED OUT
-# from config import EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS, EMA_FILE, EMA_MAX_STALENESS_DAYS
-
 # NEW CONSTANTS IMPORT
 from ema_constants import EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS
 
-# STILL NEED THESE FROM CONFIG
-from config import EMA_FILE, EMA_MAX_STALENESS_DAYS
+# NEW: Import from config_loader instead of config module
+from config_loader import load_merged_config
+
+_cfg = load_merged_config()
+EMA_FILE = _cfg.get("EMA_FILE", "ema_state.json")
+EMA_MAX_STALENESS_DAYS = _cfg.get("EMA_MAX_STALENESS_DAYS", 1)
+
+# OLD CONFIG IMPORT (COMMENTED OUT)
+# from config import EMA_FILE, EMA_MAX_STALENESS_DAYS
 
 
 def save_ema_state(ema_engine):
