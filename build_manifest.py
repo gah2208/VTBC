@@ -1,16 +1,43 @@
-__version__ = "1.0.10"
+__version__ = "1.0.11"
 # ✅ Copyright 2026 Gregory Howard. All rights reserved.
-
-
 
 # ============================================================
 # NEW IMPLEMENTATION (ACTIVE CODE)
 # ============================================================
 
-from build_manifest import BUILD_VERSION, FILES
 import re
 import sys
 import os
+
+# NEW: Define BUILD_VERSION and FILES (was missing - caused circular import)
+BUILD_VERSION = "1.0.10"
+
+FILES = {
+    "main": {
+        "path": "main.py",
+        "version": "1.1.15"
+    },
+    "ts_client": {
+        "path": "ts_client.py",
+        "version": "2.0.0"
+    },
+    "config_gen": {
+        "path": "config_gen.py",
+        "version": "1.0.0"
+    },
+    "execution_state": {
+        "path": "execution_state.py",
+        "version": "1.0.1"
+    },
+    "eligibility_engine": {
+        "path": "eligibility_engine.py",
+        "version": "1.4.0"
+    },
+    "ema_persistence": {
+        "path": "ema_persistence.py",
+        "version": "1.0.3"
+    }
+}
 
 
 def extract_version(file_path):
