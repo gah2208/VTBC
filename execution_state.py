@@ -1,8 +1,14 @@
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 from enum import Enum
 from datetime import datetime, timedelta
+
+# NEW: Import ORDER_TIMEOUT from config
+from config_loader import load_merged_config
+
+_cfg = load_merged_config()
+ORDER_TIMEOUT = _cfg.get("ORDER_TIMEOUT", 180)
 
 class State(Enum):
     IDLE = 0
@@ -26,7 +32,8 @@ class ExecutionState:
         self.qty = qty
         self.direction = direction
         self.entry_price = price
-        self.deadline = datetime.now() + timedelta(seconds=180)
+        # NEW: Use ORDER_TIMEOUT from config instead of hard-coded 180
+        self.deadline = datetime.now() + timedelta(seconds=ORDER_TIMEOUT)
 
     def check_long(self, status):
         if status == "FILLED":
@@ -38,7 +45,8 @@ class ExecutionState:
     def submit_conversion(self, oid):
         self.state = State.CONVERSION_WORKING
         self.order_id = oid
-        self.deadline = datetime.now() + timedelta(seconds=180)
+        # NEW: Use ORDER_TIMEOUT from config instead of hard-coded 180
+        self.deadline = datetime.now() + timedelta(seconds=ORDER_TIMEOUT)
 
     def check_conversion(self, status):
         if status == "FILLED":
