@@ -1,4 +1,4 @@
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 # copyright (c) Gregory Howard   all rights reserved
 
 
@@ -9,6 +9,12 @@ __version__ = "1.1.1"
 from datetime import datetime, timedelta
 import math
 from ema_constants import EMA20_SECONDS, EMA5_SECONDS, EMA3_SECONDS
+
+# NEW: Import LOOP from config for consistent dt calculation
+from config_loader import load_merged_config
+
+_cfg = load_merged_config()
+LOOP = _cfg.get("LOOP", 2)
 
 
 def get_cross_day_minute_prices(client, expiry):
@@ -60,6 +66,9 @@ def rebuild_emas(ema_engine, minute_prices):
         EMA20 = last 60 minutes
         EMA5  = last 15 minutes
         EMA3  = last 9 minutes
+    
+    NEW: Uses LOOP as dt (consistent with live update logic).
+    This eliminates the discontinuity between rebuild and live EMA calculations.
     """
 
     if len(minute_prices) < 60:
@@ -97,6 +106,8 @@ def rebuild_emas(ema_engine, minute_prices):
 def _update_single(ema_engine, period, price, timestamp):
     """
     Update a single EMA without touching others.
+    
+    NEW: Uses LOOP as dt for consistent alpha calculation with live updates.
     """
 
     if ema_engine.last_timestamp is None:
@@ -109,7 +120,9 @@ def _update_single(ema_engine, period, price, timestamp):
         if prev is None:
             ema_engine.values[period] = price
         else:
-            dt = (timestamp - ema_engine.last_timestamp).total_seconds()
+            # NEW: Use LOOP instead of actual time difference
+            # This ensures rebuild and live EMA calculations use the same dt
+            dt = LOOP
 
             if dt <= 0:
                 return
@@ -119,13 +132,13 @@ def _update_single(ema_engine, period, price, timestamp):
 
             ema_engine.values[period] = prev + alpha * (price - prev)
 
-        # NEW: Cap history arrays at 1800 to prevent unbounded growth
+        # Cap history arrays at 1800 to prevent unbounded growth
         ema_engine.history[period].append(ema_engine.values[period])
         if len(ema_engine.history[period]) > 1800:
             ema_engine.history[period].pop(0)
 
         ema_engine.last_timestamp = timestamp
         ema_engine.timestamp_history.append(timestamp.timestamp())
-        # NEW: Cap timestamp history at 1800 to match other history arrays
+        # Cap timestamp history at 1800 to match other history arrays
         if len(ema_engine.timestamp_history) > 1800:
             ema_engine.timestamp_history.pop(0)
