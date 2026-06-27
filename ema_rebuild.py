@@ -1,5 +1,5 @@
 __version__ = "1.1.1"
-copyright (c) Gregory Howard   all rights reserved
+# copyright (c) Gregory Howard   all rights reserved
 
 
 # ============================================================
@@ -119,7 +119,13 @@ def _update_single(ema_engine, period, price, timestamp):
 
             ema_engine.values[period] = prev + alpha * (price - prev)
 
+        # NEW: Cap history arrays at 1800 to prevent unbounded growth
         ema_engine.history[period].append(ema_engine.values[period])
+        if len(ema_engine.history[period]) > 1800:
+            ema_engine.history[period].pop(0)
 
         ema_engine.last_timestamp = timestamp
         ema_engine.timestamp_history.append(timestamp.timestamp())
+        # NEW: Cap timestamp history at 1800 to match other history arrays
+        if len(ema_engine.timestamp_history) > 1800:
+            ema_engine.timestamp_history.pop(0)
