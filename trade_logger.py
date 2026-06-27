@@ -1,53 +1,66 @@
-__version__ = "1.0.0"
-# Copyright 2026 Gregory Howard  all rights reserved.
+__version__ = "1.0.2"
 
-import csv
+# copyright (c) Gregory Howard  2026  all rights reserved
+
 import os
+import csv
 from datetime import datetime
-from build_manifest import BUILD_VERSION
 
-FILE_NAME = "trade_log.csv"
+# NEW: Import from config_loader to get LOG_DIR if needed
+from config_loader import load_merged_config
 
-HEADERS = [
-    "timestamp",
-    "event",
-    "build",
-    "spx_price",
-    "direction",
-    "K",
-    "spread_width",
-    "entry_price",
-    "conversion_price",
-    "order_id",
-    "details"
-]
+_cfg = load_merged_config()
+LOG_DIR = _cfg.get("LOG_DIR", ".")
+TRADE_LOG_FILE = os.path.join(LOG_DIR, "trade_log.csv")
 
-def _ensure_file():
-    if not os.path.exists(FILE_NAME):
-        with open(FILE_NAME, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(HEADERS)
 
-def log_event(event, spx_price, direction, K, W,
-              entry_price=None, conversion_price=None,
-              order_id=None, details=""):
+def log_event(event_type, spx_price, direction, strike, spread_width, order_id=None, details=None):
+    """
+    Log a trade event to trade_log.csv.
+    
+    Fields:
+        - timestamp (YYYY-MM-DD HH:MM:SS)
+        - event_type
+        - spx_price
+        - direction (C or P)
+        - strike
+        - spread_width
+        - order_id
+        - details
+    """
 
-    _ensure_file()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     row = [
-        datetime.now().strftime("%H:%M:%S"),
-        event,
-        BUILD_VERSION,
-        round(spx_price, 2) if spx_price else "",
+        timestamp,
+        event_type,
+        spx_price,
         direction,
-        K,
-        W,
-        entry_price if entry_price else "",
-        conversion_price if conversion_price else "",
+        strike,
+        spread_width,
         order_id,
         details
     ]
 
-    with open(FILE_NAME, "a", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(row)
+    try:
+        file_exists = os.path.exists(TRADE_LOG_FILE)
+
+        with open(TRADE_LOG_FILE, "a", newline="") as f:
+            writer = csv.writer(f)
+
+            if not file_exists:
+                writer.writerow([
+                    "timestamp",
+                    "event_type",
+                    "spx_price",
+                    "direction",
+                    "strike",
+                    "spread_width",
+                    "order_id",
+                    "details"
+                ])
+
+            writer.writerow(row)
+
+    except Exception as e:
+        print(f"Failed to log event: {e}")
