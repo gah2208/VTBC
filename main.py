@@ -1,5 +1,5 @@
 # main.py
-__version__ = "1.1.14"
+__version__ = "1.1.15"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 # Ensure merged config.py exists before importing modules that expect flat config constants
@@ -47,36 +47,53 @@ from ema_bootstrap import initialize_ema_engine
 from ema_persistence import save_ema_state
 from ema_constants import EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS
 
+# ===== CONFIG IMPORTS (REPLACING ADMIN_CONFIG) =====
+# Load all config constants from the generated config module
+from config import (
+    API_KEY,
+    REFRESH_TOKEN,
+    ACCOUNT_ID,
+    ENABLE_LIVE_TRADING,
+    PUSHOVER_USER_KEY,
+    PUSHOVER_API_TOKEN,
+    ADMIN_PUSHOVER_USER_KEY,
+    ADMIN_PUSHOVER_API_TOKEN,
+    PUSHOVER_ENABLED,
+    WINDOWS_ALERT_ENABLED,
+    STRIKE_STEP,
+    SPREAD_WIDTH,
+    MARKET_OPEN_TIME,
+    TRADE_START_TIME,
+    STOP_NEW_ENTRIES,
+    FORCE_EXIT_TIME,
+    FORCE_EXIT_ENABLED,
+    LOOP
+)
 
-# ===== ADMIN CONFIG LOAD =====
-ADMIN_CONFIG_LOADED = False
+# OLD ADMIN CONFIG LOAD (COMMENTED OUT)
+# ADMIN_CONFIG_LOADED = False
+# try:
+#     from admin_config import *
+#     ADMIN_CONFIG_LOADED = True
+# except:
+#     ADMIN_PUSHOVER_ENABLED = False
+#     ADMIN_ENFORCEMENT_MODE = False
 
-try:
-    from admin_config import *
-    ADMIN_CONFIG_LOADED = True
-except:
-    ADMIN_PUSHOVER_ENABLED = False
-    ADMIN_ENFORCEMENT_MODE = False
-
-
-# ===== ENFORCEMENT CHECK =====
-if ADMIN_ENFORCEMENT_MODE and not ADMIN_CONFIG_LOADED:
-
-    msg = """
-VTBC FATAL ERROR
-
-Admin configuration required but not found.
-System cannot run in enforcement mode.
-"""
-
-    print(msg)
-
-    try:
-        ctypes.windll.user32.MessageBoxW(0, msg, "VTBC CONFIG ERROR", 0x10)
-    except:
-        pass
-
-    sys.exit(1)
+# ===== ENFORCEMENT CHECK (DEPRECATED - COMMENTED OUT) =====
+# OLD ENFORCEMENT LOGIC (COMMENTED OUT)
+# if ADMIN_ENFORCEMENT_MODE and not ADMIN_CONFIG_LOADED:
+#     msg = """
+# VTBC FATAL ERROR
+# 
+# Admin configuration required but not found.
+# System cannot run in enforcement mode.
+# """
+#     print(msg)
+#     try:
+#         ctypes.windll.user32.MessageBoxW(0, msg, "VTBC CONFIG ERROR", 0x10)
+#     except:
+#         pass
+#     sys.exit(1)
 
 
 # ===== UNAUTHORIZED HANDLER (NEW) =====
@@ -147,7 +164,7 @@ Version: {__version__}
 
 def send_admin_alert(message):
 
-    if not ADMIN_PUSHOVER_ENABLED:
+    if not ADMIN_PUSHOVER_API_TOKEN or not ADMIN_PUSHOVER_USER_KEY:
         return
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -338,7 +355,6 @@ def verify_distribution_checksums(checksums_json_path, target_dir, fail_on_misma
 if __name__ == "__main__":
 
     last_validation_date = None
-    last_heartbeat_time = None
 
     # SURGICAL CHECKSUM VERIFICATION INSERTION
     # Verify the distribution checksums before doing credential validation or starting system
@@ -373,13 +389,14 @@ if __name__ == "__main__":
             now = datetime.now()
             time_str = now.strftime("%H:%M:%S")
 
-            if (
-                last_heartbeat_time is None
-                or (now - last_heartbeat_time).total_seconds() >= HEARTBEAT_INTERVAL_SECONDS
-            ):
-                status = "SAFE MODE — HOLD" if system_safe_mode else "SYSTEM OK"
-                print(f"[{time_str}] {status}")
-                last_heartbeat_time = now
+            # OLD HEARTBEAT LOGIC (COMMENTED OUT - DELETED PER USER REQUEST)
+            # if (
+            #     last_heartbeat_time is None
+            #     or (now - last_heartbeat_time).total_seconds() >= HEARTBEAT_INTERVAL_SECONDS
+            # ):
+            #     status = "SAFE MODE — HOLD" if system_safe_mode else "SYSTEM OK"
+            #     print(f"[{time_str}] {status}")
+            #     last_heartbeat_time = now
 
             today = now.date()
 
@@ -393,7 +410,8 @@ if __name__ == "__main__":
 
             spx_data = client.get_spx_price()
             if not spx_data:
-                time.sleep(LOOP_SLEEP_SECONDS)
+                # NEW: Use LOOP instead of LOOP_SLEEP_SECONDS
+                time.sleep(LOOP)
                 continue
 
             spx_price = float(spx_data["Quotes"][0]["Last"])
@@ -408,7 +426,7 @@ if __name__ == "__main__":
                 trade
                 and state.state == State.IDLE
                 and allow_entries
-                and ENABLE_TRADING
+                and ENABLE_LIVE_TRADING
                 and not system_safe_mode
             ):
 
@@ -440,7 +458,8 @@ if __name__ == "__main__":
                         order_id=oid
                     )
 
-            time.sleep(LOOP_SLEEP_SECONDS)
+            # NEW: Use LOOP instead of LOOP_SLEEP_SECONDS
+            time.sleep(LOOP)
 
     finally:
         try:
