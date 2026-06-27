@@ -1,7 +1,8 @@
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 # Copyright 2026 Gregory Howard
 
 import time
+import requests
 
 
 # ============================================================
@@ -16,10 +17,10 @@ def get_historical_minute_bars(client, minutes_needed):
     If not, fallback to repeated polling (same behavior as old rebuild).
     """
 
-    # Attempt historical endpoint (if supported)
+    # NEW: Attempt historical endpoint using correct request method
     try:
         r = client._req(
-            method=client._headers,  # placeholder — broker may not support historical
+            method=requests.get,
             url=f"{client.base_url}/marketdata/barcharts/SPX?interval=1&barsback={minutes_needed}"
         )
         if r and "Bars" in r:
@@ -29,6 +30,20 @@ def get_historical_minute_bars(client, minutes_needed):
                 return prices
     except:
         pass
+
+    # OLD CODE (COMMENTED OUT)
+    # try:
+    #     r = client._req(
+    #         method=client._headers,  # WRONG: this is a method, not a request function
+    #         url=f"{client.base_url}/marketdata/barcharts/SPX?interval=1&barsback={minutes_needed}"
+    #     )
+    #     if r and "Bars" in r:
+    #         bars = r["Bars"]
+    #         prices = [float(b["Close"]) for b in bars][-minutes_needed:]
+    #         if len(prices) == minutes_needed:
+    #             return prices
+    # except:
+    #     pass
 
     # Fallback: repeated polling (same as old get_minute_prices_for_rebuild)
     prices = []
