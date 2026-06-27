@@ -10,32 +10,32 @@ import sys
 import os
 
 # NEW: Define BUILD_VERSION and FILES (was missing - caused circular import)
-BUILD_VERSION = "1.0.10"
+BUILD_VERSION = "1.0.11"
 
 FILES = {
     "main": {
         "path": "main.py",
-        "version": "1.1.15"
+        "version": "1.1.16"
     },
     "ts_client": {
         "path": "ts_client.py",
-        "version": "2.0.0"
+        "version": "2.1.1"
     },
     "config_gen": {
         "path": "config_gen.py",
-        "version": "1.0.0"
+        "version": "1.0.1"
     },
     "execution_state": {
         "path": "execution_state.py",
-        "version": "1.0.1"
+        "version": "1.0.2"
     },
     "eligibility_engine": {
         "path": "eligibility_engine.py",
-        "version": "1.4.0"
+        "version": "1.4.1"
     },
     "ema_persistence": {
         "path": "ema_persistence.py",
-        "version": "1.0.3"
+        "version": "1.0.4"
     }
 }
 
