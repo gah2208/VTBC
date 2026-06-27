@@ -1,4 +1,4 @@
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 # copyright (c) Gregory Howard 2026  all rights reserved
 
 
@@ -35,14 +35,24 @@ class EMAEngine:
         self.timestamp_history = []
 
     # ============================================================
-    #  NEW: load_state() for bootstrap seeding
+    #  NEW: load_state() for bootstrap seeding (FIXED M-2)
     # ============================================================
     def load_state(self, ema3, ema5, ema20, timestamp=None):
+        """
+        Load EMA state from persisted data.
+        
+        NEW (M-2 FIX): Now actually assigns the provided EMA values instead of ignoring them.
+        This makes the API less fragile and more intuitive.
+        """
 
         if timestamp is None:
             timestamp = datetime.now()
 
-        # Caller sets self.values before calling this
+        # NEW: Actually assign the EMA values that were passed in
+        self.values[EMA3_SECONDS] = ema3
+        self.values[EMA5_SECONDS] = ema5
+        self.values[EMA20_SECONDS] = ema20
+
         self.last_timestamp = timestamp
         self.timestamp_history.append(timestamp.timestamp())
 
