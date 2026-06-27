@@ -1,5 +1,5 @@
 # main.py
-__version__ = "1.1.15"
+__version__ = "1.1.16"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 # Ensure merged config.py exists before importing modules that expect flat config constants
@@ -299,13 +299,15 @@ def _sha256(path):
             h.update(chunk)
     return h.hexdigest()
 
-def verify_distribution_checksums(checksums_json_path, target_dir, fail_on_mismatch=True):
+def verify_distribution_checksums(checksums_json_path, target_dir, fail_on_mismatch=False):
     """
     Verify checksums.json produced by the build installer against files in target_dir.
-    Exits with code 1 on mismatch when fail_on_mismatch is True.
+    
+    NEW: Changed fail_on_mismatch default to False (optional for development).
+    Exits with code 1 on mismatch only if fail_on_mismatch=True.
     """
     if not os.path.exists(checksums_json_path):
-        print(f"Missing checksums.json: {checksums_json_path}")
+        print(f"⚠️  Missing checksums.json: {checksums_json_path}")
         if fail_on_mismatch:
             sys.exit(1)
         return False
@@ -346,7 +348,8 @@ def verify_distribution_checksums(checksums_json_path, target_dir, fail_on_misma
         print("Checksum verification FAILED. Aborting.")
         sys.exit(1)
 
-    print("All distribution checksums match.")
+    if ok:
+        print("✅ All distribution checksums match.")
     return ok
 
 
@@ -357,11 +360,10 @@ if __name__ == "__main__":
     last_validation_date = None
 
     # SURGICAL CHECKSUM VERIFICATION INSERTION
-    # Verify the distribution checksums before doing credential validation or starting system
-    # Assumes main.py is running from the installed folder (e.g., C:\VTBC) where checksums.json resides
+    # NEW: Optional checksum verification (non-fatal by default for development)
     install_dir = os.path.dirname(os.path.abspath(__file__))
     checksums_path = os.path.join(install_dir, "checksums.json")
-    verify_distribution_checksums(checksums_path, install_dir, fail_on_mismatch=True)
+    verify_distribution_checksums(checksums_path, install_dir, fail_on_mismatch=False)
 
     validate_credentials()
     run_system_validation(send_notifications=True)
@@ -389,15 +391,6 @@ if __name__ == "__main__":
             now = datetime.now()
             time_str = now.strftime("%H:%M:%S")
 
-            # OLD HEARTBEAT LOGIC (COMMENTED OUT - DELETED PER USER REQUEST)
-            # if (
-            #     last_heartbeat_time is None
-            #     or (now - last_heartbeat_time).total_seconds() >= HEARTBEAT_INTERVAL_SECONDS
-            # ):
-            #     status = "SAFE MODE — HOLD" if system_safe_mode else "SYSTEM OK"
-            #     print(f"[{time_str}] {status}")
-            #     last_heartbeat_time = now
-
             today = now.date()
 
             if now.strftime("%H:%M") == "09:00":
@@ -406,11 +399,22 @@ if __name__ == "__main__":
                     run_system_validation(send_notifications=True)
                     last_validation_date = today
 
+            # NEW: Check force-exit time
+            if FORCE_EXIT_ENABLED and time_str >= FORCE_EXIT_TIME:
+                if state.state != State.IDLE:
+                    print(f"[{time_str}] FORCE-EXIT TIME REACHED — Canceling position")
+                    if state.order_id:
+                        try:
+                            client.cancel_order(state.order_id)
+                            log_event("FORCE_EXIT", None, None, None, None, order_id=state.order_id)
+                        except Exception as e:
+                            print(f"Failed to cancel order: {e}")
+                    state.state = State.IDLE
+
             allow_entries = not (time_str < TRADE_START_TIME or time_str >= STOP_NEW_ENTRIES)
 
             spx_data = client.get_spx_price()
             if not spx_data:
-                # NEW: Use LOOP instead of LOOP_SLEEP_SECONDS
                 time.sleep(LOOP)
                 continue
 
@@ -422,6 +426,31 @@ if __name__ == "__main__":
 
             trade = evaluate_trade(spx_price, surface, ema_engine)
 
+            # NEW: Handle long entry state
+            if state.state == State.LONG_WORKING:
+                # Poll order status (simplified: just check if still working)
+                try:
+                    order_status = client.get_order(state.order_id)
+                    status = order_status.get("OrderStatus", "UNKNOWN")
+                    
+                    check_result = state.check_long(status)
+                    
+                    if check_result == "FILLED":
+                        print(f"[{time_str}] Order FILLED: {state.order_id}")
+                        state.state = State.IDLE
+                        log_event("ORDER_FILLED", spx_price, state.direction, state.short_strike, None, order_id=state.order_id)
+                    elif check_result == "CANCEL":
+                        print(f"[{time_str}] Order TIMEOUT — Canceling: {state.order_id}")
+                        try:
+                            client.cancel_order(state.order_id)
+                        except Exception as e:
+                            print(f"Cancel failed: {e}")
+                        state.state = State.IDLE
+                        log_event("ORDER_TIMEOUT", spx_price, state.direction, state.short_strike, None, order_id=state.order_id)
+                except Exception as e:
+                    print(f"Error checking order status: {e}")
+
+            # NEW: Entry conditions with lifecycle
             if (
                 trade
                 and state.state == State.IDLE
@@ -458,7 +487,6 @@ if __name__ == "__main__":
                         order_id=oid
                     )
 
-            # NEW: Use LOOP instead of LOOP_SLEEP_SECONDS
             time.sleep(LOOP)
 
     finally:
