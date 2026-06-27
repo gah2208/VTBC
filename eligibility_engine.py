@@ -1,8 +1,16 @@
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 # Copyright 2026 Gregory Howard  all rights reserved.
 
-from config import NOISE_3_5, NOISE_5_20
+# NEW: Import from config_loader instead of config module
+from config_loader import load_merged_config
+
+_cfg = load_merged_config()
+NOISE_3_5 = _cfg.get("NOISE_3_5", 0.25)
+NOISE_5_20 = _cfg.get("NOISE_5_20", 0.25)
+
+# OLD CONFIG IMPORT (COMMENTED OUT)
+# from config import NOISE_3_5, NOISE_5_20
 
 
 def evaluate_trade(spx_price, surface, ema_engine):
@@ -41,4 +49,3 @@ def evaluate_trade(spx_price, surface, ema_engine):
                 return {"direction": "P"}
 
     return None
-
