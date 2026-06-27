@@ -1,4 +1,4 @@
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 # Copyright 2026 Gregory Howard
 
 import requests
@@ -21,6 +21,17 @@ DATA_RETRY_ATTEMPTS = _cfg.get("DATA_RETRY_ATTEMPTS", 3)
 DATA_RETRY_DELAY = _cfg.get("DATA_RETRY_DELAY", 0.5)
 MAX_API_FAILURES = _cfg.get("MAX_API_FAILURES", 5)
 ORDER_TIMEOUT = _cfg.get("ORDER_TIMEOUT", 180)
+
+# NEW: Export these constants so they can be imported by other modules
+__all__ = [
+    'TSClient',
+    'ORDER_RETRY_ATTEMPTS',
+    'TOKEN_REFRESH_DELAY',
+    'DATA_RETRY_ATTEMPTS',
+    'DATA_RETRY_DELAY',
+    'MAX_API_FAILURES',
+    'ORDER_TIMEOUT'
+]
 
 # OLD CONFIG IMPORT (commented out - using config_loader instead)
 # from config import (
