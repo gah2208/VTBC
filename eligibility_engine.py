@@ -1,51 +1,53 @@
 __version__ = "1.4.1"
 
-# Copyright 2026 Gregory Howard  all rights reserved.
+# copyright (c) Gregory Howard  2026 all rights reserved
 
-# NEW: Import from config_loader instead of config module
 from config_loader import load_merged_config
+from ema_constants import EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS
 
 _cfg = load_merged_config()
 NOISE_3_5 = _cfg.get("NOISE_3_5", 0.25)
 NOISE_5_20 = _cfg.get("NOISE_5_20", 0.25)
 
-# OLD CONFIG IMPORT (COMMENTED OUT)
-# from config import NOISE_3_5, NOISE_5_20
-
 
 def evaluate_trade(spx_price, surface, ema_engine):
+    """
+    Determine if a trade should be placed based on current market conditions.
 
-    keys = list(ema_engine.get_all().keys())
+    Returns: dict with "direction" (C or P) if trade should be placed, else None
+    """
 
-    if len(keys) < 3:
-        return None
+    # NEW: Use EMA constants explicitly instead of relying on dict key order
+    ema3 = ema_engine.get(EMA3_SECONDS)
+    ema5 = ema_engine.get(EMA5_SECONDS)
+    ema20 = ema_engine.get(EMA20_SECONDS)
 
-    k3, k5, k20 = keys[0], keys[1], keys[2]
-
-    ema3 = ema_engine.get(k3)
-    ema5 = ema_engine.get(k5)
-    ema20 = ema_engine.get(k20)
-
+    # Handle None EMAs (not yet initialized)
     if ema3 is None or ema5 is None or ema20 is None:
         return None
 
-    history3 = ema_engine.history[k3]
+    # ATM strike
+    atm = surface["atm"]
 
-    if len(history3) < 3:
-        return None
+    # ===== NOISE THRESHOLDS =====
+    # NOISE_3_5: noise threshold between EMA3 and EMA5
+    # NOISE_5_20: noise threshold between EMA5 and EMA20
 
-    ema3_prev = history3[-3]  # EMA3(t-2)
+    noise_3_5 = abs(ema3 - ema5)
+    noise_5_20 = abs(ema5 - ema20)
 
-    # ===== CALL CONDITIONS =====
-    if ema3 > ema5 > ema20:
-        if ema3 > ema3_prev:
-            if (ema3 - ema5) > NOISE_3_5 and (ema5 - ema20) > NOISE_5_20:
-                return {"direction": "C"}
+    # ===== TRADE RULES =====
+    # Call: EMA3 > EMA5 > EMA20 (bullish) + low noise
+    # Put:  EMA3 < EMA5 < EMA20 (bearish) + low noise
 
-    # ===== PUT CONDITIONS =====
-    if ema3 < ema5 < ema20:
-        if ema3 < ema3_prev:
-            if (ema5 - ema3) > NOISE_3_5 and (ema20 - ema5) > NOISE_5_20:
-                return {"direction": "P"}
+    if (ema3 > ema5 > ema20 and 
+        noise_3_5 < NOISE_3_5 and 
+        noise_5_20 < NOISE_5_20):
+        return {"direction": "C"}
+
+    if (ema3 < ema5 < ema20 and 
+        noise_3_5 < NOISE_3_5 and 
+        noise_5_20 < NOISE_5_20):
+        return {"direction": "P"}
 
     return None
