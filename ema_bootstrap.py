@@ -1,4 +1,4 @@
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # copyright (c) Gregory Howard  2026 all rights reserved
 
@@ -24,7 +24,7 @@ def initialize_ema_engine(client, expiry):
        and extract LOOP.
 
     2) Try to load previous EMA state.
-       - If present and not stale → seed EMAs from it using persisted timestamp.
+       - If present and not stale → seed EMAs from it.
 
     3) Otherwise, poll broker for 1-minute SPX data (≥60 minutes)
        and rebuild EMAs from that.
@@ -51,12 +51,22 @@ def initialize_ema_engine(client, expiry):
         ema_engine.values[EMA5_SECONDS] = state.get("ema5")
         ema_engine.values[EMA20_SECONDS] = state.get("ema20")
 
-        # Use persisted timestamp (NOT datetime.now())
-        persisted_ts = state.get("timestamp")
-        if persisted_ts:
-            persisted_ts = datetime.fromtimestamp(persisted_ts)
+        # NEW: timestamp is now epoch seconds (integer) - convert directly
+        saved_ts = state.get("timestamp")
+        if saved_ts and isinstance(saved_ts, (int, float)):
+            try:
+                persisted_ts = datetime.fromtimestamp(saved_ts)
+            except Exception:
+                persisted_ts = datetime.now()
         else:
             persisted_ts = datetime.now()
+
+        # OLD CODE (COMMENTED OUT)
+        # persisted_ts = state.get("timestamp")
+        # if persisted_ts:
+        #     persisted_ts = datetime.fromtimestamp(persisted_ts)
+        # else:
+        #     persisted_ts = datetime.now()
 
         ema_engine.load_state(
             ema3=state.get("ema3"),
