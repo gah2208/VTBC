@@ -67,6 +67,7 @@ from config import (
     STOP_NEW_ENTRIES,
     FORCE_EXIT_TIME,
     FORCE_EXIT_ENABLED,
+    ORDER_TIMEOUT,
     LOOP
 )
 
