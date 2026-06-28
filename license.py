@@ -23,7 +23,43 @@ import requests
 BASE_DIR = Path(__file__).parent
 LICENSE_CACHE_FILE = BASE_DIR / "license_cache.json"
 LICENSE_URL = "https://raw.githubusercontent.com/VTBC/license-check/main/license.json"  # canonical endpoint
+AUTH_URL = "https://raw.githubusercontent.com/gah2208/vtbc/main/auth.json"
 CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
+
+def _parse_version(value: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(part) for part in str(value).strip().split("."))
+    except Exception:
+        return ()
+
+def _check_auth_min_version(app_version: str) -> tuple[bool, str]:
+    """
+    Version gate sourced from auth.json.
+    Returns (ok, message). If auth source is unavailable or malformed, allow startup.
+    """
+    try:
+        r = requests.get(AUTH_URL, timeout=6.0)
+        if r.status_code != 200:
+            return True, ""
+        payload = r.json()
+        min_version = payload.get("min_version")
+        if min_version is None:
+            return True, ""
+
+        current_version = _parse_version(app_version)
+        required_version = _parse_version(min_version)
+        if not current_version or not required_version:
+            return True, ""
+
+        if current_version >= required_version:
+            return True, ""
+
+        return False, (
+            f"Version check failed: current version {app_version} "
+            f"is below required version {min_version} from auth.json."
+        )
+    except Exception:
+        return True, ""
 
 def _machine_id() -> str:
     """
@@ -105,6 +141,10 @@ def check_license(app_version: str) -> tuple[bool, str]:
     """
     machine = _machine_id()
 
+    version_ok, version_msg = _check_auth_min_version(app_version)
+    if not version_ok:
+        return False, version_msg
+
     # Try remote first
     ok, msg, raw = _query_remote(machine, app_version)
     if raw is not None:
@@ -126,4 +166,3 @@ def check_license(app_version: str) -> tuple[bool, str]:
     else:
         # No valid cache; return remote failure message
         return False, msg or "License check failed and no valid cache available."
-
