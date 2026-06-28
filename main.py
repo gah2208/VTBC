@@ -1,5 +1,5 @@
 # main.py
-__version__ = "1.1.16"
+__version__ = "1.2.5"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 # Ensure merged config.py exists before importing modules that expect flat config constants
@@ -19,6 +19,7 @@ try:
 except Exception:
     pass
 
+import math
 import time
 import socket
 import requests
@@ -31,9 +32,10 @@ from datetime import datetime
 
 from ts_client import TSClient
 from execution_state import ExecutionState, State
-from order_builder import format_option_symbol
-from market_data import get_atm_surface, get_minute_prices_for_rebuild
-from eligibility_engine import evaluate_trade
+from order_builder import build_vertical_order
+from market_data import get_atm_surface, get_minute_prices_for_rebuild, get_option_quote, get_spread_quote
+from eligibility_engine import evaluate_trade, check_min_em
+from trade_conflicts import has_conflict
 # OLD EMA IMPORTS (COMMENTED OUT)
 # from ema_engine import EMAEngine
 # from ema_rebuild import rebuild_emas
@@ -68,7 +70,15 @@ from config import (
     FORCE_EXIT_TIME,
     FORCE_EXIT_ENABLED,
     ORDER_TIMEOUT,
-    LOOP
+    LOOP,
+    MIN_EM,
+    MAX_PREMIUM,
+    SLIPPAGE,
+    BID_ASK_SPREAD,
+    POSITIONS,
+    ACCOUNT_CAPITAL,
+    MAX_CALLS_ACTIVE,
+    MAX_PUTS_ACTIVE
 )
 
 # OLD ADMIN CONFIG LOAD (COMMENTED OUT)
@@ -438,8 +448,14 @@ if __name__ == "__main__":
                     
                     if check_result == "FILLED":
                         print(f"[{time_str}] Order FILLED: {state.order_id}")
+                        filled_direction = state.direction
+                        filled_long_strike = state.long_strike
+                        filled_short_strike = state.short_strike
+
+                        state.add_position(filled_direction, filled_long_strike, filled_short_strike)
+                        # Log entry long strike as the primary filled strike for this vertical.
+                        log_event("ORDER_FILLED", spx_price, filled_direction, filled_long_strike, None, order_id=state.order_id)
                         state.state = State.IDLE
-                        log_event("ORDER_FILLED", spx_price, state.direction, state.short_strike, None, order_id=state.order_id)
                     elif check_result == "CANCEL":
                         print(f"[{time_str}] Order TIMEOUT — Canceling: {state.order_id}")
                         try:
@@ -451,7 +467,7 @@ if __name__ == "__main__":
                 except Exception as e:
                     print(f"Error checking order status: {e}")
 
-            # NEW: Entry conditions with lifecycle
+            # Entry conditions with full qualification + 2-leg vertical order
             if (
                 trade
                 and state.state == State.IDLE
@@ -462,28 +478,95 @@ if __name__ == "__main__":
 
                 direction = trade["direction"]
                 atm = surface["atm"]
-                K = select_strike_K(spx_price, atm, direction)
+                long_strike = select_strike_K(spx_price, atm, direction)
 
-                oid = client.place_order({
-                    "AccountID": ACCOUNT_ID,
-                    "OrderType": "Market",
-                    "Legs": [
-                        {
-                            "Symbol": format_option_symbol(expiry, K, direction),
-                            "Quantity": "1",
-                            "TradeAction": "BUY"
-                        }
-                    ]
-                })
+                if direction == "C":
+                    short_strike = long_strike + SPREAD_WIDTH
+                else:
+                    short_strike = long_strike - SPREAD_WIDTH
+
+                # Qualification 0: expected directional move using ATM single-leg option mid
+                atm_option = get_option_quote(client, expiry, atm, direction)
+                if not atm_option or not check_min_em(atm_option["mid"], MIN_EM):
+                    time.sleep(LOOP)
+                    continue
+
+                # Qualification 1: active per-direction cap
+                if direction == "C" and state.count_active("C") >= MAX_CALLS_ACTIVE:
+                    time.sleep(LOOP)
+                    continue
+                if direction == "P" and state.count_active("P") >= MAX_PUTS_ACTIVE:
+                    time.sleep(LOOP)
+                    continue
+
+                # Qualification 2: conflict detection
+                # trade_conflicts.has_conflict expects proposed_strikes as (pL1, pS, pL2).
+                if direction == "C":
+                    # Calls: lower long, center short, upper wing.
+                    proposed = (long_strike, short_strike, short_strike + SPREAD_WIDTH)
+                else:
+                    # Puts: lower wing, center short, upper long.
+                    proposed = (short_strike - SPREAD_WIDTH, short_strike, long_strike)
+
+                if has_conflict(state.get_active_positions(), direction, proposed, SPREAD_WIDTH):
+                    time.sleep(LOOP)
+                    continue
+
+                # Qualification 3 + 4: OTM vertical spread bid/ask width + premium cap
+                spread_quote = get_spread_quote(client, expiry, long_strike, short_strike, direction)
+                if not spread_quote:
+                    time.sleep(LOOP)
+                    continue
+
+                bid_ask_width = spread_quote["ask"] - spread_quote["bid"]
+                if bid_ask_width >= BID_ASK_SPREAD:
+                    time.sleep(LOOP)
+                    continue
+
+                mid = spread_quote["mid"]
+                if mid <= 0:
+                    time.sleep(LOOP)
+                    continue
+
+                # MAX_PREMIUM is in cents (e.g., 200 = $2.00/share); SLIPPAGE is in dollars/share.
+                premium_cap = (MAX_PREMIUM / 100) + SLIPPAGE
+                # Strictly less than cap per strategy rule.
+                if mid >= premium_cap:
+                    time.sleep(LOOP)
+                    continue
+
+                # Quantity sizing
+                if POSITIONS >= 1:
+                    quantity = int(POSITIONS)
+                else:
+                    # mid = dollars/share, ACCOUNT_CAPITAL = dollars.
+                    contract_multiplier = 100  # shares/contract
+                    base_contracts = math.floor(ACCOUNT_CAPITAL / (mid * contract_multiplier))
+                    quantity = max(1, int(POSITIONS * base_contracts))
+
+                # Limit price
+                limit_price = round(min(mid + SLIPPAGE, premium_cap), 2)
+
+                order_payload = build_vertical_order(
+                    expiry=expiry,
+                    long_strike=long_strike,
+                    short_strike=short_strike,
+                    right=direction,
+                    quantity=quantity,
+                    limit_price=limit_price
+                )
+                order_payload["AccountID"] = ACCOUNT_ID
+
+                oid = client.place_order(order_payload)
 
                 if oid:
-                    state.submit_long(oid, K, 1, direction, 0.0)
+                    state.submit_long(oid, long_strike, short_strike, quantity, direction, limit_price)
 
                     log_event(
                         "ENTRY_PLACED",
                         spx_price,
                         direction,
-                        K,
+                        long_strike,
                         SPREAD_WIDTH,
                         order_id=oid
                     )
