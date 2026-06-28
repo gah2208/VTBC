@@ -1,5 +1,7 @@
 # main.py
-__version__ = "1.2.5"
+# NEW: bumped for ENABLE_LIVE_TRADING fix (route LIVE vs SIM by flag; trades always placed)
+__version__ = "1.2.6"
+# OLD VERSION (COMMENTED OUT): old___version__ = "1.2.5"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 # Ensure merged config.py exists before importing modules that expect flat config constants

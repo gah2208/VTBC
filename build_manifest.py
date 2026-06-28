@@ -15,7 +15,9 @@ BUILD_VERSION = "1.2.0"
 FILES = {
     "main": {
         "path": "main.py",
-        "version": "1.2.5"
+        # OLD (COMMENTED OUT): "version": "1.2.5"
+        # NEW: matches main.py bump for ENABLE_LIVE_TRADING LIVE/SIM routing fix
+        "version": "1.2.6"
     },
     "ts_client": {
         "path": "ts_client.py",
