@@ -1,4 +1,4 @@
-__version__ = "1.1.5"
+__version__ = "1.2.0"
 # ✅ Copyright 2026 Gregory Howard. All rights reserved.
 
 # ============================================================
@@ -10,7 +10,7 @@ import sys
 import os
 
 # NEW: Define BUILD_VERSION and FILES (was missing - caused circular import)
-BUILD_VERSION = "1.1.5"
+BUILD_VERSION = "1.2.0"
 
 FILES = {
     "main": {
@@ -36,6 +36,10 @@ FILES = {
     "ema_persistence": {
         "path": "ema_persistence.py",
         "version": "1.0.4"
+    },
+    "market_data": {
+        "path": "market_data.py",
+        "version": "1.2.0"
     }
 }
 
