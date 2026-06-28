@@ -382,7 +382,12 @@ if __name__ == "__main__":
     # OLD EMA INITIALIZATION (COMMENTED OUT)
     # ema_engine = EMAEngine([EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS])
 
-    client = TSClient(API_KEY, REFRESH_TOKEN, ACCOUNT_ID)
+    # OLD: client always defaulted to SIM because `live` was never passed (COMMENTED OUT)
+    # client = TSClient(API_KEY, REFRESH_TOKEN, ACCOUNT_ID)
+    # NEW: route order endpoints by the flag.
+    #   ENABLE_LIVE_TRADING = True  -> trades sent to the LIVE trading URL
+    #   ENABLE_LIVE_TRADING = False -> the SAME trades sent to the SIM trading URL
+    client = TSClient(API_KEY, REFRESH_TOKEN, ACCOUNT_ID, live=ENABLE_LIVE_TRADING)
     state = ExecutionState()
 
     print("SYSTEM STARTED")
@@ -472,7 +477,10 @@ if __name__ == "__main__":
                 trade
                 and state.state == State.IDLE
                 and allow_entries
-                and ENABLE_LIVE_TRADING
+                # OLD: ENABLE_LIVE_TRADING blocked the trade entirely when False (COMMENTED OUT)
+                # and ENABLE_LIVE_TRADING
+                # NEW: trades are ALWAYS placed when qualified; ENABLE_LIVE_TRADING only
+                # selects the destination URL (LIVE vs SIM) via TSClient(live=...) above.
                 and not system_safe_mode
             ):
 
