@@ -29,7 +29,7 @@ CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
 def _parse_version(value: str) -> tuple[int, ...]:
     try:
         return tuple(int(part) for part in str(value).strip().split("."))
-    except Exception:
+    except (TypeError, ValueError, AttributeError):
         return ()
 
 def _check_auth_min_version(app_version: str) -> tuple[bool, str]:
@@ -58,7 +58,7 @@ def _check_auth_min_version(app_version: str) -> tuple[bool, str]:
             f"Version check failed: current version {app_version} "
             f"is below required version {min_version} from auth.json."
         )
-    except Exception:
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
         return True, ""
 
 def _machine_id() -> str:
