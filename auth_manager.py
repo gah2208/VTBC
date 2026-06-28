@@ -1,5 +1,5 @@
-__version__ = "1.0.1"
-copyright (c) Gregory Howard 2026  all rights reserved
+__version__ = "1.0.2"
+# copyright (c) Gregory Howard 2026  all rights reserved
 
 import os
 import json
