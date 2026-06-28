@@ -1,5 +1,5 @@
 # main.py
-__version__ = "1.2.0"
+__version__ = "1.2.5"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 # Ensure merged config.py exists before importing modules that expect flat config constants
@@ -448,9 +448,14 @@ if __name__ == "__main__":
                     
                     if check_result == "FILLED":
                         print(f"[{time_str}] Order FILLED: {state.order_id}")
-                        state.add_position(state.direction, state.short_strike, state.hedge_strike)
+                        filled_direction = state.direction
+                        filled_long_strike = state.long_strike
+                        filled_short_strike = state.short_strike
+
+                        state.add_position(filled_direction, filled_long_strike, filled_short_strike)
+                        # Log entry long strike as the primary filled strike for this vertical.
+                        log_event("ORDER_FILLED", spx_price, filled_direction, filled_long_strike, None, order_id=state.order_id)
                         state.state = State.IDLE
-                        log_event("ORDER_FILLED", spx_price, state.direction, state.short_strike, None, order_id=state.order_id)
                     elif check_result == "CANCEL":
                         print(f"[{time_str}] Order TIMEOUT — Canceling: {state.order_id}")
                         try:
@@ -495,9 +500,12 @@ if __name__ == "__main__":
                     continue
 
                 # Qualification 2: conflict detection
+                # trade_conflicts.has_conflict expects proposed_strikes as (pL1, pS, pL2).
                 if direction == "C":
+                    # Calls: lower long, center short, upper wing.
                     proposed = (long_strike, short_strike, short_strike + SPREAD_WIDTH)
                 else:
+                    # Puts: lower wing, center short, upper long.
                     proposed = (short_strike - SPREAD_WIDTH, short_strike, long_strike)
 
                 if has_conflict(state.get_active_positions(), direction, proposed, SPREAD_WIDTH):
@@ -516,7 +524,13 @@ if __name__ == "__main__":
                     continue
 
                 mid = spread_quote["mid"]
+                if mid <= 0:
+                    time.sleep(LOOP)
+                    continue
+
+                # MAX_PREMIUM is in cents (e.g., 200 = $2.00/share); SLIPPAGE is in dollars/share.
                 premium_cap = (MAX_PREMIUM / 100) + SLIPPAGE
+                # Strictly less than cap per strategy rule.
                 if mid >= premium_cap:
                     time.sleep(LOOP)
                     continue
@@ -525,7 +539,9 @@ if __name__ == "__main__":
                 if POSITIONS >= 1:
                     quantity = int(POSITIONS)
                 else:
-                    base_contracts = math.floor(ACCOUNT_CAPITAL / (mid * 100)) if mid > 0 else 0
+                    # mid = dollars/share, ACCOUNT_CAPITAL = dollars.
+                    contract_multiplier = 100  # shares/contract
+                    base_contracts = math.floor(ACCOUNT_CAPITAL / (mid * contract_multiplier))
                     quantity = max(1, int(POSITIONS * base_contracts))
 
                 # Limit price

@@ -1,4 +1,4 @@
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 # copyright (c) Gregory Howard  2026 all rights reserved
 
@@ -11,14 +11,14 @@ NOISE_5_20 = _cfg.get("NOISE_5_20", 0.25)
 MIN_EM = _cfg.get("MIN_EM", 8)
 
 
-def check_min_em(option_mid, min_em):
+def check_min_em(option_mid, min_em_threshold):
     """
     Option-1 expected-move qualifier:
     use ATM single-leg option mid for the eligible direction (C or P).
     """
     if option_mid is None:
         return False
-    return option_mid >= min_em
+    return option_mid >= min_em_threshold
 
 
 def evaluate_trade(spx_price, surface, ema_engine):

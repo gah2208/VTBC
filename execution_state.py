@@ -1,4 +1,4 @@
-__version__ = "1.1.0"
+__version__ = "1.1.5"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 from enum import Enum
@@ -20,8 +20,8 @@ class ExecutionState:
         self.state = State.IDLE
         self.order_id = None
         self.deadline = None
+        self.long_strike = None
         self.short_strike = None
-        self.hedge_strike = None
         self.qty = 0
         self.direction = None
         self.entry_price = None
@@ -30,8 +30,8 @@ class ExecutionState:
     def submit_long(self, oid, long_strike, short_strike, qty, direction, price):
         self.state = State.LONG_WORKING
         self.order_id = oid
-        self.short_strike = long_strike
-        self.hedge_strike = short_strike
+        self.long_strike = long_strike
+        self.short_strike = short_strike
         self.qty = qty
         self.direction = direction
         self.entry_price = price
@@ -57,6 +57,7 @@ class ExecutionState:
         return "WAIT"
 
     def add_position(self, direction, long_strike, short_strike):
+        # Keep strikes as single-element lists to match trade_conflicts expected schema.
         self.active_positions.append({
             "direction": direction,
             "long_strikes": [long_strike],
