@@ -1,65 +1,128 @@
-__version__ = "1.0.10"
-# ✅ Copyright 2026 Gregory Howard. All rights reserved.
+__version__ = "1.1.0"
+# Copyright 2026 Gregory Howard. All rights reserved.
 
-
-
-# ============================================================
-# NEW IMPLEMENTATION (ACTIVE CODE)
-# ============================================================
-
-from build_manifest import BUILD_VERSION, FILES
+import json
+import os
 import re
 import sys
-import os
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+MANIFEST_PATH = os.path.join(ROOT_DIR, "manifest.json")
+CHECK_EXTENSIONS = {".py", ".json", ".bat", ".ps1"}
+
+
+def get_root_files():
+    files = []
+
+    for name in sorted(os.listdir(ROOT_DIR)):
+        path = os.path.join(ROOT_DIR, name)
+
+        if not os.path.isfile(path):
+            continue
+
+        _, ext = os.path.splitext(name.lower())
+        if ext in CHECK_EXTENSIONS:
+            files.append(name)
+
+    return files
+
+
+def load_manifest():
+    if not os.path.exists(MANIFEST_PATH):
+        raise FileNotFoundError(f"manifest.json not found: {MANIFEST_PATH}")
+
+    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    manifest_files = {}
+    for entry in data.get("files", []):
+        manifest_files[entry.get("file")] = entry.get("version")
+
+    return manifest_files
 
 
 def extract_version(file_path):
-    if not os.path.exists(file_path):
-        return None, f"❌ MISSING FILE: {file_path}"
+    _, ext = os.path.splitext(file_path.lower())
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        return None, f"READ ERROR: {e}"
 
-    match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
+    if ext == ".py":
+        match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
+        if match:
+            return match.group(1), None
+        return None, "VERSION NOT FOUND"
 
-    if not match:
-        return None, f"❌ VERSION NOT FOUND: {file_path}"
+    if ext == ".json":
+        try:
+            data = json.loads(content)
+            version = data.get("__version__") or data.get("version")
+            if version is not None:
+                return str(version), None
+            return None, "VERSION NOT FOUND"
+        except Exception as e:
+            return None, f"INVALID JSON: {e}"
 
-    return match.group(1), None
+    if ext in {".bat", ".ps1"}:
+        match = re.search(r'__version__\s*=\s*"([^"]+)"', content, re.IGNORECASE)
+        if match:
+            return match.group(1), None
+        match = re.search(r'\bversion\b\s*[:=]\s*"([^"]+)"', content, re.IGNORECASE)
+        if match:
+            return match.group(1), None
+        return None, "VERSION NOT FOUND"
+
+    return None, "UNSUPPORTED FILE TYPE"
 
 
 def run_build_check():
-    print(f"✅ Expected Build Version: {BUILD_VERSION}")
+    manifest_versions = load_manifest()
+    root_files = get_root_files()
+
+    print("=== MANIFEST CHECK ===")
     print()
 
     failures = []
 
-    for name, data in FILES.items():
-        file_path = data["path"]
-        expected_version = data["version"]
+    for name in root_files:
+        path = os.path.join(ROOT_DIR, name)
+        actual_version, actual_error = extract_version(path)
 
-        actual_version, error = extract_version(file_path)
-
-        if error:
-            print(error)
+        if name not in manifest_versions:
+            print(f"FAIL | {name} | manifest=MISSING | actual={actual_version or actual_error}")
             failures.append(name)
             continue
 
-        if actual_version != expected_version:
-            print(f"❌ VERSION MISMATCH: {name}")
-            print(f"   Expected: {expected_version}, Found: {actual_version}")
+        expected_version = manifest_versions[name]
+
+        if actual_error:
+            print(f"FAIL | {name} | manifest={expected_version} | actual={actual_error}")
+            failures.append(name)
+            continue
+
+        if expected_version != actual_version:
+            print(f"FAIL | {name} | manifest={expected_version} | actual={actual_version}")
             failures.append(name)
         else:
-            print(f"✅ {name}: {actual_version}")
+            print(f"PASS | {name} | manifest={expected_version} | actual={actual_version}")
+
+    manifest_only = sorted(set(manifest_versions.keys()) - set(root_files))
+    for name in manifest_only:
+        print(f"FAIL | {name} | manifest={manifest_versions[name]} | actual=FILE MISSING FROM ROOT")
+        failures.append(name)
 
     print()
+    print(f"Checked files: {len(root_files)}")
+    print(f"Failures: {len(failures)}")
 
     if failures:
-        print("❌ BUILD FAILED")
-        print(f"   Issues found in: {', '.join(failures)}")
+        print("BUILD CHECK FAILED")
         sys.exit(1)
 
-    print("✅ BUILD VERIFIED")
+    print("BUILD CHECK PASSED")
 
 
 if __name__ == "__main__":
