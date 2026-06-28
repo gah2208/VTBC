@@ -1,4 +1,4 @@
-__version__ = "1.0.11"
+__version__ = "1.1.0"
 # ✅ Copyright 2026 Gregory Howard. All rights reserved.
 
 # ============================================================
@@ -10,12 +10,12 @@ import sys
 import os
 
 # NEW: Define BUILD_VERSION and FILES (was missing - caused circular import)
-BUILD_VERSION = "1.0.11"
+BUILD_VERSION = "1.1.0"
 
 FILES = {
     "main": {
         "path": "main.py",
-        "version": "1.1.16"
+        "version": "1.2.0"
     },
     "ts_client": {
         "path": "ts_client.py",
@@ -27,11 +27,11 @@ FILES = {
     },
     "execution_state": {
         "path": "execution_state.py",
-        "version": "1.0.2"
+        "version": "1.1.0"
     },
     "eligibility_engine": {
         "path": "eligibility_engine.py",
-        "version": "1.4.1"
+        "version": "1.5.0"
     },
     "ema_persistence": {
         "path": "ema_persistence.py",

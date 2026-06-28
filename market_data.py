@@ -1,4 +1,4 @@
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 # Copyright 2026 Gregory Howard
 
 import time
@@ -87,3 +87,72 @@ def get_atm_surface(client, expiry, spx_price):
     """
     atm = int(round(spx_price))
     return {"atm": atm}
+
+
+# ============================================================
+# NEW: Option Quote + Vertical Spread Quote Helpers
+# ============================================================
+
+def get_option_quote(client, expiry, strike, right):
+    """
+    Fetch bid/ask/mid for a single option.
+
+    right: "C" or "P"
+    Returns dict {"bid": float, "ask": float, "mid": float} or None on failure.
+    """
+    from order_builder import format_option_symbol
+
+    symbol = format_option_symbol(expiry, strike, right)
+
+    try:
+        r = client.get_quotes([symbol])
+        if not r or "Quotes" not in r or len(r["Quotes"]) < 1:
+            return None
+
+        q = r["Quotes"][0]
+        bid = float(q.get("Bid", 0) or 0)
+        ask = float(q.get("Ask", 0) or 0)
+        mid = round((bid + ask) / 2, 4)
+
+        return {"bid": bid, "ask": ask, "mid": mid}
+    except Exception:
+        return None
+
+
+def get_spread_quote(client, expiry, long_strike, short_strike, right):
+    """
+    Fetch bid/ask/mid for a 2-leg debit vertical spread.
+
+    For BUY long / SELL short:
+      spread_bid = long_bid - short_ask
+      spread_ask = long_ask - short_bid
+      spread_mid = (spread_bid + spread_ask) / 2
+    """
+    from order_builder import format_option_symbol
+
+    long_sym = format_option_symbol(expiry, long_strike, right)
+    short_sym = format_option_symbol(expiry, short_strike, right)
+
+    try:
+        r = client.get_quotes([long_sym, short_sym])
+        if not r or "Quotes" not in r or len(r["Quotes"]) < 2:
+            return None
+
+        long_q = next((q for q in r["Quotes"] if q.get("Symbol", "") == long_sym), None)
+        short_q = next((q for q in r["Quotes"] if q.get("Symbol", "") == short_sym), None)
+
+        if not long_q or not short_q:
+            return None
+
+        long_bid = float(long_q.get("Bid", 0) or 0)
+        long_ask = float(long_q.get("Ask", 0) or 0)
+        short_bid = float(short_q.get("Bid", 0) or 0)
+        short_ask = float(short_q.get("Ask", 0) or 0)
+
+        spread_bid = round(long_bid - short_ask, 4)
+        spread_ask = round(long_ask - short_bid, 4)
+        spread_mid = round((spread_bid + spread_ask) / 2, 4)
+
+        return {"bid": spread_bid, "ask": spread_ask, "mid": spread_mid}
+    except Exception:
+        return None

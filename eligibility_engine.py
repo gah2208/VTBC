@@ -1,4 +1,4 @@
-__version__ = "1.4.1"
+__version__ = "1.5.0"
 
 # copyright (c) Gregory Howard  2026 all rights reserved
 
@@ -8,6 +8,17 @@ from ema_constants import EMA3_SECONDS, EMA5_SECONDS, EMA20_SECONDS
 _cfg = load_merged_config()
 NOISE_3_5 = _cfg.get("NOISE_3_5", 0.25)
 NOISE_5_20 = _cfg.get("NOISE_5_20", 0.25)
+MIN_EM = _cfg.get("MIN_EM", 8)
+
+
+def check_min_em(option_mid, min_em):
+    """
+    Option-1 expected-move qualifier:
+    use ATM single-leg option mid for the eligible direction (C or P).
+    """
+    if option_mid is None:
+        return False
+    return option_mid >= min_em
 
 
 def evaluate_trade(spx_price, surface, ema_engine):

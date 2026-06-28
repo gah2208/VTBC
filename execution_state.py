@@ -1,4 +1,4 @@
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 # Copyright 2026 Gregory Howard  all rights reserved.
 
 from enum import Enum
@@ -21,14 +21,17 @@ class ExecutionState:
         self.order_id = None
         self.deadline = None
         self.short_strike = None
+        self.hedge_strike = None
         self.qty = 0
         self.direction = None
         self.entry_price = None
+        self.active_positions = []
 
-    def submit_long(self, oid, strike, qty, direction, price):
+    def submit_long(self, oid, long_strike, short_strike, qty, direction, price):
         self.state = State.LONG_WORKING
         self.order_id = oid
-        self.short_strike = strike
+        self.short_strike = long_strike
+        self.hedge_strike = short_strike
         self.qty = qty
         self.direction = direction
         self.entry_price = price
@@ -52,3 +55,17 @@ class ExecutionState:
         if status == "FILLED":
             return "DONE"
         return "WAIT"
+
+    def add_position(self, direction, long_strike, short_strike):
+        self.active_positions.append({
+            "direction": direction,
+            "long_strikes": [long_strike],
+            "short_strikes": [short_strike],
+            "base_short": short_strike
+        })
+
+    def count_active(self, direction):
+        return sum(1 for p in self.active_positions if p.get("direction") == direction)
+
+    def get_active_positions(self):
+        return list(self.active_positions)
