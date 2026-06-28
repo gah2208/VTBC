@@ -21,6 +21,15 @@ AUTH_URL = "https://raw.githubusercontent.com/gah2208/vtbc/main/auth.json"
 APP_VERSION = 1.1
 
 
+def _parse_version(value):
+    try:
+        if isinstance(value, (int, float)):
+            return tuple(int(part) for part in str(value).split("."))
+        return tuple(int(part) for part in str(value).strip().split("."))
+    except Exception:
+        return ()
+
+
 # ===== LOAD CONFIG =====
 def load_config():
     values = {}
@@ -89,7 +98,10 @@ def check_version_and_prompt(data):
     if min_version is None:
         return True
 
-    if APP_VERSION >= float(min_version):
+    current_version = _parse_version(APP_VERSION)
+    required_version = _parse_version(min_version)
+
+    if required_version and current_version >= required_version:
         return True
 
     result = messagebox.askyesno(
@@ -124,7 +136,10 @@ def run_update():
 
     if os.path.exists(UPDATE_SCRIPT):
         try:
-            subprocess.Popen([UPDATE_SCRIPT], shell=True)
+            if os.name == "nt":
+                subprocess.Popen(["cmd", "/c", UPDATE_SCRIPT])
+            else:
+                subprocess.Popen([UPDATE_SCRIPT])
         except:
             pass
 

@@ -48,7 +48,7 @@ try:
     from execution_state import ExecutionState
     state = ExecutionState()
     # Verify ORDER_TIMEOUT is being used (check the deadline calculation)
-    state.submit_long("TEST_OID", 450, 1, "C", 0.0)
+    state.submit_long("TEST_OID", 450, 455, 1, "C", 0.0)
     if state.deadline is None:
         print("❌ Deadline not set")
         sys.exit(1)
