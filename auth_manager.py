@@ -2,32 +2,17 @@ __version__ = "1.0.1"
 copyright (c) Gregory Howard 2026  all rights reserved
 
 import os
-import json
 import uuid
 import requests
 import hashlib
 import socket
 import sys
-import subprocess
 from tkinter import messagebox
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.py")
-UPDATE_SCRIPT = os.path.join(BASE_DIR, "Update.bat")
 
 AUTH_URL = "https://raw.githubusercontent.com/gah2208/vtbc/main/auth.json"
-
-# ✅ APPLICATION VERSION
-APP_VERSION = 1.1
-
-
-def _parse_version(value):
-    try:
-        if isinstance(value, (int, float)):
-            return tuple(int(part) for part in str(value).split("."))
-        return tuple(int(part) for part in str(value).strip().split("."))
-    except Exception:
-        return ()
 
 
 # ===== LOAD CONFIG =====
@@ -90,35 +75,6 @@ def fetch_auth():
         return None
 
 
-# ===== VERSION CHECK =====
-def check_version_and_prompt(data):
-
-    min_version = data.get("min_version")
-
-    if min_version is None:
-        return True
-
-    current_version = _parse_version(APP_VERSION)
-    required_version = _parse_version(min_version)
-
-    if required_version and current_version >= required_version:
-        return True
-
-    result = messagebox.askyesno(
-        "Update Available",
-        f"A newer version is available.\n\n"
-        f"Current version: {APP_VERSION}\n"
-        f"Required version: {min_version}\n\n"
-        f"Would you like to update now?"
-    )
-
-    if result:
-        run_update()
-        sys.exit(0)
-
-    return True
-
-
 # ===== AUTH CHECK =====
 def check_authorization(data):
 
@@ -129,19 +85,6 @@ def check_authorization(data):
         return False
 
     return users[machine_id].get("enabled", False)
-
-
-# ===== RUN UPDATE =====
-def run_update():
-
-    if os.path.exists(UPDATE_SCRIPT):
-        try:
-            if os.name == "nt":
-                subprocess.Popen(["cmd", "/c", UPDATE_SCRIPT])
-            else:
-                subprocess.Popen([UPDATE_SCRIPT])
-        except:
-            pass
 
 
 # ===== MAIN ENFORCER =====
@@ -157,9 +100,6 @@ def enforce_auth():
             "Check your internet connection and try again."
         )
         sys.exit(1)
-
-    # ✅ VERSION CHECK (SOFT PROMPT)
-    check_version_and_prompt(data)
 
     # ✅ AUTH CHECK
     if check_authorization(data):
