@@ -1,7 +1,7 @@
 # main.py
-# NEW: bumped for ENABLE_LIVE_TRADING fix (route LIVE vs SIM by flag; trades always placed)
-__version__ = "1.2.6"
-# OLD VERSION (COMMENTED OUT): old___version__ = "1.2.5"
+# NEW: path resolution fix for frozen exe + external JSON lookup
+__version__ = "1.2.7"
+# OLD VERSION (COMMENTED OUT): old___version__ = "1.2.6"
 
 # Ensure merged config.py exists before importing modules that expect flat config constants
 try:
@@ -96,7 +96,7 @@ from config import (
 # if ADMIN_ENFORCEMENT_MODE and not ADMIN_CONFIG_LOADED:
 #     msg = """
 # VTBC FATAL ERROR
-# 
+#
 # Admin configuration required but not found.
 # System cannot run in enforcement mode.
 # """
@@ -109,7 +109,6 @@ from config import (
 
 
 # ===== UNAUTHORIZED HANDLER (NEW) =====
-
 def handle_unauthorized():
 
     user_id = socket.gethostname()
@@ -138,7 +137,6 @@ system_safe_mode = False
 
 
 # ===== ALERTING =====
-
 def send_alert(message):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -206,7 +204,6 @@ Version: {__version__}
 
 
 # ===== CREDENTIAL VALIDATION =====
-
 def validate_credentials():
 
     missing = []
@@ -241,7 +238,6 @@ def validate_credentials():
 
 
 # ===== VALIDATION FLOW =====
-
 def run_system_validation(spx_price=None, send_notifications=False):
 
     global system_safe_mode
@@ -311,10 +307,11 @@ def _sha256(path):
             h.update(chunk)
     return h.hexdigest()
 
+
 def verify_distribution_checksums(checksums_json_path, target_dir, fail_on_mismatch=False):
     """
     Verify checksums.json produced by the build installer against files in target_dir.
-    
+
     NEW: Changed fail_on_mismatch default to False (optional for development).
     Exits with code 1 on mismatch only if fail_on_mismatch=True.
     """
@@ -366,14 +363,13 @@ def verify_distribution_checksums(checksums_json_path, target_dir, fail_on_misma
 
 
 # ===== MAIN =====
-
 if __name__ == "__main__":
 
     last_validation_date = None
 
     # SURGICAL CHECKSUM VERIFICATION INSERTION
     # NEW: Optional checksum verification (non-fatal by default for development)
-    install_dir = os.path.dirname(os.path.abspath(__file__))
+    install_dir = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
     checksums_path = os.path.join(install_dir, "checksums.json")
     verify_distribution_checksums(checksums_path, install_dir, fail_on_mismatch=False)
 
@@ -449,9 +445,9 @@ if __name__ == "__main__":
                 try:
                     order_status = client.get_order(state.order_id)
                     status = order_status.get("OrderStatus", "UNKNOWN")
-                    
+
                     check_result = state.check_long(status)
-                    
+
                     if check_result == "FILLED":
                         print(f"[{time_str}] Order FILLED: {state.order_id}")
                         filled_direction = state.direction
